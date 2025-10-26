@@ -291,6 +291,29 @@ app.get('/api/valid-codes', (req, res) => {
 });
 
 // ============================================
+// API: DELETE VALID CODE
+// ============================================
+
+app.delete('/api/delete-code/:code', (req, res) => {
+  const code = req.params.code.toUpperCase();
+  
+  db.run('DELETE FROM valid_codes WHERE code = ?', [code], function(err) {
+    if (err) {
+      return res.status(500).json({ success: false, error: err.message });
+    }
+    
+    if (this.changes === 0) {
+      return res.status(404).json({ success: false, error: 'Code not found' });
+    }
+    
+    res.json({
+      success: true,
+      message: `Code ${code} deleted successfully`
+    });
+  });
+});
+
+// ============================================
 // API: GET DEVICES
 // ============================================
 
