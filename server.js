@@ -384,7 +384,7 @@ app.post('/api/alert', async (req, res) => {
         if (user.teams_affected > 0) notificationBody += ` [${user.teams_affected} teams]`;
         if (details) notificationBody += ` - ${details.substring(0, 100)}`;
 
-        let notificationTitle = `${getAlertEmoji(alert_level)} `;
+        let notificationTitle = '';
         if (alert_level.toLowerCase() === 'monster') notificationTitle += 'MONSTER ALERT - ';
         notificationTitle += title;
 
