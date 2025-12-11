@@ -468,6 +468,61 @@ app.get('/api/notifications', async (req, res) => {
 });
 
 // ============================================
+// API: SEARCH ALERTS
+// ============================================
+
+app.get('/api/alerts/search', async (req, res) => {
+  try {
+    const { player, status, date, alert_level } = req.query;
+    
+    if (!player && !status && !date && !alert_level) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'At least one search parameter required (player, status, date, or alert_level)' 
+      });
+    }
+
+    let query = 'SELECT TOP 50 * FROM notifications WHERE is_deleted = 0';
+    const request = pool.request();
+    
+    // Add filters based on provided parameters
+    if (player) {
+      query += ' AND title LIKE @player';
+      request.input('player', sql.NVarChar, `%${player}%`);
+    }
+    
+    if (status) {
+      query += ' AND status LIKE @status';
+      request.input('status', sql.NVarChar, `%${status}%`);
+    }
+    
+    if (alert_level) {
+      query += ' AND alert_level = @alert_level';
+      request.input('alert_level', sql.NVarChar, alert_level.toLowerCase());
+    }
+    
+    if (date) {
+      // Search for alerts sent on the specified date
+      query += ' AND CAST(sent_at AS DATE) = @date';
+      request.input('date', sql.Date, date);
+    }
+    
+    query += ' ORDER BY sent_at DESC';
+    
+    const result = await request.query(query);
+    
+    res.json({ 
+      success: true, 
+      results: result.recordset,
+      count: result.recordset.length
+    });
+  } catch (error) {
+    console.error('Search error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ============================================
 // API: UPDATE ALERT
 // ============================================
 
