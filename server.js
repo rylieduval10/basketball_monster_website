@@ -60,6 +60,7 @@ async function initializeDatabase() {
         code NVARCHAR(50) PRIMARY KEY,
         pushToken NVARCHAR(500),
         registrationId NVARCHAR(50),
+        notifications_enabled BIT DEFAULT 1,
         timestamp DATETIME DEFAULT GETDATE()
       )
     `);
@@ -368,6 +369,14 @@ app.post('/api/alert', async (req, res) => {
 
         const device = deviceResult.recordset[0];
 
+        //check if notifications are enabled for the user
+
+        if(!device.notifications_enabled) {
+          console.log(`User ${user.user_id} has notifications disabled`);
+          failed++;
+          continue;
+        }
+
         await pool.request()
           .input('alert_id', sql.NVarChar, alert_id)
           .input('user_code', sql.NVarChar, user.user_id)
@@ -380,9 +389,8 @@ app.post('/api/alert', async (req, res) => {
           .query(`INSERT INTO user_alerts (alert_id, user_code, title, status, status_color, alert_level, details, teams_affected) 
                   VALUES (@alert_id, @user_code, @title, @status, @status_color, @alert_level, @details, @teams_affected)`);
 
-        let notificationBody = status;
-        if (user.teams_affected > 0) notificationBody += ` [${user.teams_affected} teams]`;
-        if (details) notificationBody += ` - ${details.substring(0, 100)}`;
+          let notificationBody = `${title} - ${status}`;
+          if (alert_level.toLowerCase() === 'monster') notificationBody += ' (Monster)';
 
         let notificationTitle = '';
         if (alert_level.toLowerCase() === 'monster') notificationTitle += 'MONSTER ALERT - ';
@@ -432,6 +440,59 @@ app.post('/api/alert', async (req, res) => {
   } catch (error) {
     console.error('Error sending alert:', error);
     res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
+// ============================================
+// API: CHECK NOTIFICATION SETTINGS
+// ============================================
+
+app.put('/api/user/:code/notifications', async (req, res) => {
+  try {
+    const code = req.params.code.toUpperCase();
+    const { enabled } = req.body;
+
+    if (typeof enabled !== 'boolean') {
+      return res.status(400).json({ success: false, error: 'enabled must be true or false'});
+    }
+
+    const result = await pool.request()
+      .input('code', sql.NVarChar, code)
+      .input('enabled', sql.Bit, enabled ? 1: 0)
+      .query('UPDATE devices SET notifications_enabled = @enabled WHERE code = @code');
+
+    if (result.rowsAffected[0] === 0) {
+      return res.status(400).json({ success: false, error: 'User not found'});
+    }
+
+    res.json({ success: true, notifications_enabled: enabled});
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message});
+  }
+});
+
+// ============================================
+// API: GET NOTIFICATION STATUS
+// ============================================
+
+app.get('/api/user/:code/notifications-status', async (req, res) => {
+  try {
+    const code = req.params.code.toUpperCase();
+    
+    const result = await pool.request()
+      .input('code', sql.NVarChar, code)
+      .query('SELECT notifications_enabled FROM devices WHERE code = @code');
+    
+    if (result.recordset.length === 0) {
+      return res.status(404).json({ success: false, error: 'User not found' });
+    }
+
+    res.json({ 
+      success: true, 
+      notifications_enabled: result.recordset[0].notifications_enabled === 1 
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
   }
 });
 
