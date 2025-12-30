@@ -369,14 +369,7 @@ app.post('/api/alert', async (req, res) => {
 
         const device = deviceResult.recordset[0];
 
-        //check if notifications are enabled for the user
-
-        if(!device.notifications_enabled) {
-          console.log(`User ${user.user_id} has notifications disabled`);
-          failed++;
-          continue;
-        }
-
+        // ALWAYS add alert to user_alerts table (so they can see it in the app)
         await pool.request()
           .input('alert_id', sql.NVarChar, alert_id)
           .input('user_code', sql.NVarChar, user.user_id)
@@ -389,8 +382,16 @@ app.post('/api/alert', async (req, res) => {
           .query(`INSERT INTO user_alerts (alert_id, user_code, title, status, status_color, alert_level, details, teams_affected) 
                   VALUES (@alert_id, @user_code, @title, @status, @status_color, @alert_level, @details, @teams_affected)`);
 
-          let notificationBody = `${title} - ${status}`;
-          if (alert_level.toLowerCase() === 'monster') notificationBody += ' (Monster)';
+        // Check if notifications are enabled - only send push notification if enabled
+        if (!device.notifications_enabled) {
+          console.log(`🔕 User ${user.user_id} has notifications disabled - alert added but not sent`);
+          successful++; // Still count as successful since alert was added
+          continue;
+        }
+
+        // Build and send push notification
+        let notificationBody = `${title} - ${status}`;
+        if (alert_level.toLowerCase() === 'monster') notificationBody += ' (Monster)';
 
         let notificationTitle = '';
         if (alert_level.toLowerCase() === 'monster') notificationTitle += 'MONSTER ALERT - ';
